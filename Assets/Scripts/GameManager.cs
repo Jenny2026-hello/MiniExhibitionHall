@@ -1,29 +1,27 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>
-/// 游戏全局管理器 - 控制游戏状态、场景切换、全局UI
-/// </summary>
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
 
     [Header("UI References")]
-    public GameObject startPanel;          // 开始面板
-    public GameObject infoPanel;           // 展品信息面板
-    public Text infoTitleText;             // 展品标题
-    public Text infoDescText;              // 展品描述
-    public Text info3IText;                // 3I标签文字（新增）
-    public Text interactionHint;           // 交互提示文字
-    public GameObject pausePanel;          // 暂停菜单
+    public GameObject startPanel;
+    public GameObject infoPanel;
+    public Text infoTitleText;
+    public Text infoDescText;
+    public Text info3IText;
+    public Text interactionHint;
+    public GameObject pausePanel;
 
     [Header("Settings")]
     public float mouseSensitivity = 2f;
     public float moveSpeed = 5f;
     public bool invertY = false;
 
-    private bool isPaused = false;
-    private bool isGameStarted = false;
+    private bool isPaused;
+    private bool isGameStarted;
+    private bool isInfoOpen;
 
     void Awake()
     {
@@ -34,48 +32,89 @@ public class GameManager : MonoBehaviour
         else
         {
             Destroy(gameObject);
-            return;
         }
     }
 
     void Start()
     {
-        // 初始显示开始面板
-        if (startPanel != null)
-            startPanel.SetActive(true);
+        Time.timeScale = 1f;
+        BindRuntimeButtons();
 
-        if (infoPanel != null)
-            infoPanel.SetActive(false);
+        if (startPanel != null) startPanel.SetActive(true);
+        if (infoPanel != null) infoPanel.SetActive(false);
+        if (pausePanel != null) pausePanel.SetActive(false);
 
+        isPaused = false;
+        isInfoOpen = false;
         LockCursor(false);
     }
 
     void Update()
     {
-        // ESC 暂停/继续（仅在游戏开始后生效）
+        if (!isGameStarted && (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space)))
+        {
+            StartGame();
+            return;
+        }
+
+        if (isInfoOpen && (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return) || Input.GetMouseButtonDown(0)))
+        {
+            HideExhibitInfo();
+            return;
+        }
+
         if (isGameStarted && Input.GetKeyDown(KeyCode.Escape))
         {
             TogglePause();
         }
     }
 
-    /// <summary>
-    /// 开始游戏 - 关闭开始面板，锁定鼠标
-    /// </summary>
+    void BindRuntimeButtons()
+    {
+        BindButton("StartButton", StartGame);
+        BindButton("QuitButton", QuitGame);
+        BindButton("CloseInfoButton", HideExhibitInfo);
+        BindButton("ResumeButton", TogglePause);
+        BindButton("PauseQuitButton", QuitGame);
+    }
+
+    void BindButton(string objectName, UnityEngine.Events.UnityAction action)
+    {
+        Button button = FindButtonIncludingInactive(objectName);
+        if (button == null) return;
+
+        button.onClick.RemoveAllListeners();
+        button.onClick.AddListener(action);
+    }
+
+    Button FindButtonIncludingInactive(string objectName)
+    {
+        Button[] buttons = Resources.FindObjectsOfTypeAll<Button>();
+        foreach (Button button in buttons)
+        {
+            if (button != null && button.name == objectName)
+            {
+                return button;
+            }
+        }
+
+        return null;
+    }
+
     public void StartGame()
     {
         isGameStarted = true;
+        isPaused = false;
+        Time.timeScale = 1f;
 
-        if (startPanel != null)
-            startPanel.SetActive(false);
+        HideAllStartPanels();
+        RemoveLegacySceneOverlays();
+        if (pausePanel != null) pausePanel.SetActive(false);
 
         LockCursor(true);
         AudioManager.Instance?.PlayBGM();
     }
 
-    /// <summary>
-    /// 退出游戏
-    /// </summary>
     public void QuitGame()
     {
 #if UNITY_EDITOR
@@ -85,86 +124,134 @@ public class GameManager : MonoBehaviour
 #endif
     }
 
-    /// <summary>
-    /// 显示展品信息面板（含3I标签）
-    /// </summary>
-    public void ShowExhibitInfo(string title, string description,
-        string immersionNote = "", string interactionNote = "", string imaginationNote = "")
+    public void ShowExhibitInfo(string title, string description, string immersionNote = "", string interactionNote = "", string imaginationNote = "")
     {
         if (infoPanel == null) return;
 
         infoPanel.SetActive(true);
+        isInfoOpen = true;
+
         if (infoTitleText != null) infoTitleText.text = title;
         if (infoDescText != null) infoDescText.text = description;
 
-        // 显示3I标签信息
-        if (info3IText != null && !string.IsNullOrEmpty(immersionNote))
+        if (info3IText != null)
         {
             string threeI = "";
-            if (!string.IsNullOrEmpty(immersionNote))
-                threeI += "【沉浸性】" + immersionNote + "\n";
-            if (!string.IsNullOrEmpty(interactionNote))
-                threeI += "【交互性】" + interactionNote + "\n";
-            if (!string.IsNullOrEmpty(imaginationNote))
-                threeI += "【构想性】" + imaginationNote;
+            if (!string.IsNullOrEmpty(immersionNote)) threeI += "\u6c89\u6d78: " + immersionNote + "\n";
+            if (!string.IsNullOrEmpty(interactionNote)) threeI += "\u4ea4\u4e92: " + interactionNote + "\n";
+            if (!string.IsNullOrEmpty(imaginationNote)) threeI += "\u6784\u60f3: " + imaginationNote;
             info3IText.text = threeI;
         }
 
         LockCursor(false);
     }
 
-    /// <summary>
-    /// 隐藏展品信息面板
-    /// </summary>
     public void HideExhibitInfo()
     {
-        if (infoPanel != null)
-            infoPanel.SetActive(false);
+        if (infoPanel != null) infoPanel.SetActive(false);
+        isInfoOpen = false;
 
-        LockCursor(true);
-    }
-
-    /// <summary>
-    /// 显示交互提示
-    /// </summary>
-    public void ShowHint(string hint)
-    {
-        if (interactionHint != null)
+        if (isGameStarted && !isPaused)
         {
-            interactionHint.text = hint;
-            interactionHint.gameObject.SetActive(true);
+            LockCursor(true);
         }
     }
 
-    /// <summary>
-    /// 隐藏交互提示
-    /// </summary>
-    public void HideHint()
+    public void ShowHint(string hint)
     {
-        if (interactionHint != null)
-            interactionHint.gameObject.SetActive(false);
+        if (interactionHint == null) return;
+
+        interactionHint.text = hint;
+        GameObject hintRoot = interactionHint.transform.parent != null && interactionHint.transform.parent.name == "HintPanel"
+            ? interactionHint.transform.parent.gameObject
+            : interactionHint.gameObject;
+        hintRoot.SetActive(true);
     }
 
-    /// <summary>
-    /// 切换暂停状态
-    /// </summary>
+    public void HideHint()
+    {
+        if (interactionHint == null) return;
+
+        GameObject hintRoot = interactionHint.transform.parent != null && interactionHint.transform.parent.name == "HintPanel"
+            ? interactionHint.transform.parent.gameObject
+            : interactionHint.gameObject;
+        hintRoot.SetActive(false);
+    }
+
     public void TogglePause()
     {
+        if (isInfoOpen)
+        {
+            HideExhibitInfo();
+            return;
+        }
+
         isPaused = !isPaused;
         Time.timeScale = isPaused ? 0f : 1f;
 
-        if (pausePanel != null)
-            pausePanel.SetActive(isPaused);
-
+        if (pausePanel != null) pausePanel.SetActive(isPaused);
         LockCursor(!isPaused);
     }
 
-    /// <summary>
-    /// 锁定/解锁鼠标光标
-    /// </summary>
     private void LockCursor(bool locked)
     {
         Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
         Cursor.visible = !locked;
+    }
+
+    private void HideAllStartPanels()
+    {
+        if (startPanel != null) startPanel.SetActive(false);
+
+        GameObject[] objects = Resources.FindObjectsOfTypeAll<GameObject>();
+        foreach (GameObject obj in objects)
+        {
+            if (obj == null || !obj.scene.IsValid()) continue;
+            if (obj.name == "StartPanel")
+            {
+                obj.SetActive(false);
+            }
+        }
+    }
+
+    private void RemoveLegacySceneOverlays()
+    {
+        foreach (TextMesh textMesh in FindObjectsOfType<TextMesh>())
+        {
+            if (textMesh != null && IsLegacyFloatingText(textMesh.gameObject))
+            {
+                Destroy(textMesh.gameObject);
+            }
+        }
+
+        foreach (Canvas canvas in FindObjectsOfType<Canvas>())
+        {
+            if (canvas != null && canvas.renderMode == RenderMode.WorldSpace && IsLegacyFloatingText(canvas.gameObject))
+            {
+                Destroy(canvas.gameObject);
+            }
+        }
+
+        foreach (Light light in FindObjectsOfType<Light>())
+        {
+            if (light != null)
+            {
+                Destroy(light.gameObject);
+            }
+        }
+
+        foreach (AudioSource audioSource in FindObjectsOfType<AudioSource>())
+        {
+            if (audioSource != null && audioSource.GetComponent<AudioManager>() == null)
+            {
+                Destroy(audioSource.gameObject);
+            }
+        }
+    }
+
+    private bool IsLegacyFloatingText(GameObject obj)
+    {
+        if (obj == null) return false;
+        return obj.name.Contains("WelcomeText") || obj.name.Contains("WorldText") || obj.name.Contains("StartTitle") || obj.name.Contains("Legacy");
     }
 }

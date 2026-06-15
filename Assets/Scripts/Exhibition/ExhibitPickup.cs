@@ -1,20 +1,16 @@
 using UnityEngine;
 
-/// <summary>
-/// 展品拾取查看 - 允许玩家拾起展品并在手中旋转查看
-/// 在ExhibitBase基础上扩展功能
-/// </summary>
 public class ExhibitPickup : ExhibitBase
 {
-    [Header("拾取设置")]
-    public float pickupDistance = 1.5f;      // 拾取后距相机的距离
-    public float rotationSpeed = 100f;       // 手动旋转速度
-    public Vector3 pickupOffset = Vector3.zero; // 拾取后的位置偏移
-    public Vector3 pickupScale = Vector3.one;   // 拾取后的缩放
-    public float minZoom = 0.5f;             // 最小缩放距离
-    public float maxZoom = 3f;               // 最大缩放距离
+    [Header("Pickup")]
+    public float pickupDistance = 1.8f;
+    public float rotationSpeed = 120f;
+    public Vector3 pickupOffset = Vector3.zero;
+    public Vector3 pickupScale = Vector3.one;
+    public float minZoom = 0.9f;
+    public float maxZoom = 3f;
 
-    private bool isPickedUp = false;
+    private bool isPickedUp;
     private Transform originalParent;
     private Vector3 originalPosition;
     private Quaternion originalRotation;
@@ -24,44 +20,39 @@ public class ExhibitPickup : ExhibitBase
 
     void Start()
     {
-        // 保存原始Transform
         originalParent = transform.parent;
         originalPosition = transform.position;
         originalRotation = transform.rotation;
         originalScale = transform.localScale;
         originalAutoRotateSpeed = autoRotateSpeed;
-
         playerCamera = Camera.main;
     }
 
-    /// <summary>
-    /// 在基类Update之后执行拾取相关逻辑
-    /// </summary>
-    void LateUpdate()
+    protected override void Update()
     {
-        // 未被拾取时，基类的Update会处理自动旋转
-        if (!isPickedUp) return;
+        if (!isPickedUp)
+        {
+            base.Update();
+            return;
+        }
 
-        // 鼠标左键拖动旋转
         if (Input.GetMouseButton(0))
         {
             float mouseX = Input.GetAxis("Mouse X") * rotationSpeed * Time.deltaTime;
             float mouseY = Input.GetAxis("Mouse Y") * rotationSpeed * Time.deltaTime;
             transform.Rotate(Vector3.up, -mouseX, Space.World);
-            transform.Rotate(Vector3.right, mouseY, Space.World);
+            Vector3 pitchAxis = Camera.main != null ? Camera.main.transform.right : Vector3.right;
+            transform.Rotate(pitchAxis, mouseY, Space.World);
         }
 
-        // 鼠标滚轮缩放
         float scroll = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(scroll) > 0.01f)
         {
             Vector3 pos = transform.localPosition;
-            pos.z += scroll * 0.5f;
-            pos.z = Mathf.Clamp(pos.z, minZoom, maxZoom);
+            pos.z = Mathf.Clamp(pos.z + scroll * 0.6f, minZoom, maxZoom);
             transform.localPosition = pos;
         }
 
-        // 按E放下
         if (Input.GetKeyDown(KeyCode.E))
         {
             PutDown();
@@ -70,62 +61,57 @@ public class ExhibitPickup : ExhibitBase
 
     public override void OnInteract()
     {
-        if (!isPickedUp)
-        {
-            PickUp();
-        }
-        else
+        if (isPickedUp)
         {
             PutDown();
         }
+        else
+        {
+            PickUp();
+        }
     }
 
-    /// <summary>
-    /// 拾取展品
-    /// </summary>
     void PickUp()
     {
         isPickedUp = true;
+        hintText = "\u6309 E \u653e\u56de | \u9f20\u6807\u5de6\u952e\u62d6\u52a8\u65cb\u8f6c | \u6eda\u8f6e\u7f29\u653e";
 
-        // 修改提示
-        hintText = "按 E 放下 | 鼠标拖动旋转 | 滚轮缩放";
-
-        // 挂载到相机下
+        if (playerCamera == null) playerCamera = Camera.main;
         if (playerCamera != null)
         {
-            transform.SetParent(playerCamera.transform);
+            transform.SetParent(playerCamera.transform, true);
             transform.localPosition = Vector3.forward * pickupDistance + pickupOffset;
             transform.localRotation = Quaternion.identity;
             transform.localScale = pickupScale;
         }
 
-        // 停止自动旋转
-        autoRotateSpeed = 0;
+        autoRotateSpeed = 0f;
+        GameManager.Instance?.ShowHint(hintText);
 
-        // 播放音效
         if (exhibitSound != null)
         {
             AudioManager.Instance?.PlaySFX(exhibitSound);
         }
     }
 
-    /// <summary>
-    /// 放下展品
-    /// </summary>
     void PutDown()
     {
         isPickedUp = false;
+        hintText = "\u6309 E \u62ff\u8d77\u89c2\u5bdf";
 
-        // 恢复提示
-        hintText = "按 E 拾取查看";
-
-        // 恢复原始Transform
-        transform.SetParent(originalParent);
+        transform.SetParent(originalParent, true);
         transform.position = originalPosition;
         transform.rotation = originalRotation;
         transform.localScale = originalScale;
-
-        // 恢复自动旋转
         autoRotateSpeed = originalAutoRotateSpeed;
+
+        if (isPlayerNearby)
+        {
+            GameManager.Instance?.ShowHint(hintText);
+        }
+        else
+        {
+            GameManager.Instance?.HideHint();
+        }
     }
 }

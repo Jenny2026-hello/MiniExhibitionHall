@@ -1,21 +1,18 @@
 using UnityEngine;
 
-/// <summary>
-/// 区域触发器 - 当玩家进入特定区域时触发事件
-/// 例如：进入"古代文物区"时自动播放介绍语音
-/// </summary>
 public class ZoneTrigger : MonoBehaviour
 {
-    [Header("区域信息")]
-    public string zoneName = "未命名区域";
+    [Header("Zone Info")]
+    public string zoneName = "Unnamed Zone";
+
     [TextArea(2, 5)]
     public string zoneDescription = "";
 
-    [Header("触发设置")]
-    public bool triggerOnce = false;          // 是否只触发一次
-    public AudioClip zoneIntroAudio;          // 区域介绍音效
+    [Header("Trigger")]
+    public bool triggerOnce = false;
+    public AudioClip zoneIntroAudio;
 
-    private bool hasTriggered = false;
+    private bool hasTriggered;
 
     void OnTriggerEnter(Collider other)
     {
@@ -23,15 +20,11 @@ public class ZoneTrigger : MonoBehaviour
         if (triggerOnce && hasTriggered) return;
 
         hasTriggered = true;
+        GameManager.Instance?.ShowHint("\u8fdb\u5165\u5c55\u533a: " + zoneName + " | \u9760\u8fd1\u5c55\u54c1\u540e\u6309 E \u4ea4\u4e92");
 
-        // 显示区域信息
-        GameManager.Instance?.ShowHint("进入区域: " + zoneName);
-
-        // 播放区域介绍的展品信息
         if (!string.IsNullOrEmpty(zoneDescription))
         {
-            // 可以在这里触发特定的UI或音频
-            Debug.Log("[ZoneTrigger] 进入区域: " + zoneName);
+            Debug.Log("[ZoneTrigger] " + zoneName + ": " + zoneDescription);
         }
 
         if (zoneIntroAudio != null)
